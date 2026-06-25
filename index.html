@@ -1,17 +1,135 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Conesta App</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Core App - CRUD & Auth</title>
+    <style>
+        body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; line-height: 1.6; }
+        .hidden { display: none; }
+        .item-card { border: 1px solid #ccc; padding: 10px; margin: 10px 0; border-radius: 4px; display: flex; justify-content: space-between; }
+        button { cursor: pointer; padding: 5px 10px; }
+        input { padding: 8px; margin: 5px 0; width: 100%; box-sizing: border-box; }
+    </style>
 </head>
 <body>
-    <h1>Welcome to Conesta App 🚀</h1>
-    <p>This is my working web application.</p>
 
-    <button onclick="showMessage()">Click Me</button>
+    <h2>Day 2: Core App Prototype</h2>
+
+    <div id="auth-section">
+        <h3>Login</h3>
+        <p>Use secret token: <code>super-secret-token</code></p>
+        <input type="text" id="token-input" placeholder="Enter Token">
+        <button onclick="login()">Login</button>
+    </div>
+
+    <div id="app-section" class="hidden">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h3>Welcome to your Dashboard</h3>
+            <button onclick="logout()">Logout</button>
+        </div>
+        
+        <hr>
+
+        <h4>Create New Item</h4>
+        <input type="text" id="item-name" placeholder="Item Name">
+        <input type="text" id="item-desc" placeholder="Item Description">
+        <button onclick="createItem()">Add Item</button>
+
+        <h4>Current Items</h4>
+        <div id="items-list">Loading items...</div>
+    </div>
 
     <script>
-        function showMessage() {
-            alert("App is working!");
+        let token = localStorage.getItem('authToken') || '';
+
+        // Check login state on load
+        if (token) {
+            showApp();
+        }
+
+        function login() {
+            const inputVal = document.getElementById('token-input').value.trim();
+            if (inputVal === 'super-secret-token') {
+                token = inputVal;
+                localStorage.setItem('authToken', token);
+                showApp();
+            } else {
+                alert('Invalid Token!');
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('authToken');
+            token = '';
+            document.getElementById('auth-section').classList.remove('hidden');
+            document.getElementById('app-section').classList.add('hidden');
+        }
+
+        function showApp() {
+            document.getElementById('auth-section').classList.add('hidden');
+            document.getElementById('app-section').classList.remove('hidden');
+            fetchItems();
+        }
+
+        // CRUD: READ
+        async function fetchItems() {
+            try {
+                const res = await fetch('/api/script', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const result = await res.json();
+                
+                const listDiv = document.getElementById('items-list');
+                listDiv.innerHTML = '';
+
+                if(result.data && result.data.length > 0) {
+                    result.data.forEach(item => {
+                        listDiv.innerHTML += `
+                            <div class="item-card">
+                                <div>
+                                    <strong>${item.name}</strong> - ${item.description}
+                                </div>
+                                <button onclick="deleteItem(${item.id})">❌ Delete</button>
+                            </div>
+                        `;
+                    });
+                } else {
+                    listDiv.innerHTML = '<p>No items found. Create one above!</p>';
+                }
+            } catch (err) {
+                console.error("Error fetching items", err);
+            }
+        }
+
+        // CRUD: CREATE
+        async function createItem() {
+            const name = document.getElementById('item-name').value;
+            const description = document.getElementById('item-desc').value;
+
+            if(!name) return alert('Name required');
+
+            await fetch('/api/script', {
+                method: 'POST',
+                headers: { 
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ name, description })
+            });
+
+            document.getElementById('item-name').value = '';
+            document.getElementById('item-desc').value = '';
+            fetchItems();
+        }
+
+        // CRUD: DELETE
+        async function deleteItem(id) {
+            await fetch(`/api/script?id=${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            fetchItems();
         }
     </script>
 </body>
