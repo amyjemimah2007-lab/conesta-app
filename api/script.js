@@ -1,49 +1,68 @@
-// Mock database stored in memory (Resets on function cold starts, but works for the grading system)
-let items = [
-  { id: 1, name: "Sample Item", description: "This is a test CRUD item" }
-];
+import OpenAI from "openai";
+
+// Initialize the OpenAI client using the API key from the environment
+const client = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 export default async function handler(req, res) {
-  // Simple Authentication Check (Checks for a simulated Authorization header or token)
-  const authHeader = req.headers.authorization;
-  if (!authHeader || authHeader !== "Bearer super-secret-token") {
-    return res.status(401).json({ error: "Unauthorized. Missing or invalid token." });
+  // Allow only POST requests
+  if (req.method !== "POST") {
+    return res.status(405).json({
+      success: false,
+      error: "Only POST requests are allowed."
+    });
   }
 
-  const { method } = req;
-  const { id } = req.query;
+  try {
+    // Get the habit from the frontend
+    const { habit } = req.body;
 
-  switch (method) {
-    case "GET":
-      // READ
-      return res.status(200).json({ success: true, data: items });
+    // Validate input
+    if (!habit || habit.trim() === "") {
+      return res.status(400).json({
+        success: false,
+        error: "Please enter a habit."
+      });
+    }
 
-    case "POST":
-      // CREATE
-      const { name, description } = req.body || {};
-      if (!name) return res.status(400).json({ error: "Name is required" });
-      
-      const newItem = { id: Date.now(), name, description || "" };
-      items.push(newItem);
-      return res.status(201).json({ success: true, data: newItem });
+    // Send request to OpenAI
+    const response = await client.responses.create({
+      model: "gpt-4.1-mini",
+      input: `
+You are an expert AI Habit Coach.
 
-    case "PUT":
-      // UPDATE
-      if (!id) return res.status(400).json({ error: "ID is required for update" });
-      const updateIndex = items.findIndex(item => item.id == id);
-      if (updateIndex === -1) return res.status(404).json({ error: "Item not found" });
+The user wants to build the following habit:
 
-      items[updateIndex] = { ...items[updateIndex], ...req.body };
-      return res.status(200).json({ success: true, data: items[updateIndex] });
+"${habit}"
 
-    case "DELETE":
-      // DELETE
-      if (!id) return res.status(400).json({ error: "ID is required for deletion" });
-      items = items.filter(item => item.id != id);
-      return res.status(200).json({ success: true, message: `Item ${id} deleted successfully` });
+Give the response in this format:
 
-    default:
-      res.setHeader("Allow", ["GET", "POST", "PUT", "DELETE"]);
-      return res.status(405).end(`Method ${method} Not Allowed`);
+🌟 Motivation:
+(2-3 encouraging sentences)
+
+💡 Tip:
+(One practical tip)
+
+🎯 Today's Challenge:
+(One simple action they should complete today)
+
+Keep the total response under 150 words.
+`
+    });
+
+    // Return AI response
+    return res.status(200).json({
+      success: true,
+      reply: response.output_text
+    });
+
+  } catch (error) {
+    console.error("OpenAI Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      error: "Unable to generate a response. Please try again later."
+    });
   }
 }
